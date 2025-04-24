@@ -46,7 +46,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, UserPlus, Search, Loader2, UserX } from "lucide-react";
+import { MoreHorizontal, UserPlus, Search, Loader2, UserX, UserCog } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -54,6 +54,10 @@ interface UserFormData {
   name: string;
   email: string;
   password: string;
+  role: "admin" | "editor" | "viewer";
+}
+
+interface RoleFormData {
   role: "admin" | "editor" | "viewer";
 }
 
@@ -65,6 +69,7 @@ const Users = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [newUserDialogOpen, setNewUserDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editRoleDialogOpen, setEditRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // Check if user is admin, if not redirect
@@ -82,6 +87,18 @@ const Users = () => {
       role: "viewer",
     },
   });
+
+  const roleForm = useForm<RoleFormData>({
+    defaultValues: {
+      role: "viewer",
+    },
+  });
+
+  useEffect(() => {
+    if (selectedUser) {
+      roleForm.setValue("role", selectedUser.role);
+    }
+  }, [selectedUser, roleForm]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -112,6 +129,23 @@ const Users = () => {
       toast.success("User created successfully");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to create user";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleUpdateRole = async (data: RoleFormData) => {
+    if (!selectedUser) return;
+
+    try {
+      const updatedUser = await mockApi.users.update(selectedUser.id, {
+        role: data.role
+      });
+      
+      setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+      setEditRoleDialogOpen(false);
+      toast.success(`${selectedUser.name}'s role updated to ${data.role}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update user role";
       toast.error(errorMessage);
     }
   };
@@ -304,7 +338,14 @@ const Users = () => {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem>Edit User</DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setEditRoleDialogOpen(true);
+                        }}
+                      >
+                        <UserCog className="mr-2 h-4 w-4" /> Manage Role
+                      </DropdownMenuItem>
                       <DropdownMenuItem>View Activity</DropdownMenuItem>
                       <DropdownMenuItem>Reset Password</DropdownMenuItem>
                       {currentUser?.id !== user.id && (
@@ -315,7 +356,7 @@ const Users = () => {
                             setDeleteDialogOpen(true);
                           }}
                         >
-                          Delete User
+                          <UserX className="mr-2 h-4 w-4" /> Delete User
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
@@ -326,6 +367,69 @@ const Users = () => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Edit Role Dialog */}
+      <Dialog open={editRoleDialogOpen} onOpenChange={setEditRoleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCog className="h-5 w-5 text-primary" />
+              Manage User Role
+            </DialogTitle>
+            <DialogDescription>
+              Update {selectedUser?.name}'s role and permissions
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...roleForm}>
+            <form
+              onSubmit={roleForm.handleSubmit(handleUpdateRole)}
+              className="space-y-4 py-2"
+            >
+              <FormField
+                control={roleForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="admin">
+                          Administrator - Full system access
+                        </SelectItem>
+                        <SelectItem value="editor">
+                          Editor - Can create and modify content
+                        </SelectItem>
+                        <SelectItem value="viewer">
+                          Viewer - Read-only access
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditRoleDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Update Role</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
